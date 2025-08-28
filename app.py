@@ -25,8 +25,6 @@ SESSION_PREFIX = 'hk:session:'
 # indexes
 SESSION_INDEX = 'hk:idx:session'
 
-WORD_RE = re.compile(r'\w+', re.UNICODE)
-
 GLOBAL_REDIS = Redis.from_url(REDIS_URL, decode_responses=True)
 
 def redis_client():
@@ -230,11 +228,16 @@ def is_nonempty(s) -> bool:
 
 
 def jaccard_similarity(query_text: str, title: str) -> float:
-    q_tokens = set(t.lower() for t in WORD_RE.findall(query_text))
-    t_tokens = set(t.lower() for t in WORD_RE.findall(title or ''))
-    if not q_tokens:
+    set1 = set(query_text.lower().split())
+    set2 = set(title.lower().split())
+
+    intersection = set1.intersection(set2)
+    union = set1.union(set2)
+
+    if not union:
         return 0.0
-    return len(q_tokens & t_tokens) / len(q_tokens)
+
+    return len(intersection) / len(union)
 
 
 def compute_bucket_and_score(row, query_text, now_ms):
