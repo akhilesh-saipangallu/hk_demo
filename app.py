@@ -2,10 +2,8 @@ import argparse
 import math
 import sys
 import time
-import uuid
 import json
 import re
-import datetime
 import time
 
 from redis import Redis
@@ -29,9 +27,11 @@ SESSION_INDEX = 'hk:idx:session'
 
 WORD_RE = re.compile(r'\w+', re.UNICODE)
 
+GLOBAL_REDIS = Redis.from_url(REDIS_URL, decode_responses=True)
 
 def redis_client():
-    return Redis.from_url(REDIS_URL, decode_responses=True)
+    return GLOBAL_REDIS
+    # return Redis.from_url(REDIS_URL, decode_responses=True)
 
 
 def print_with_separator(tag, *args):
@@ -119,12 +119,29 @@ def action_search(**kwargs):
     if not limit:
         limit = 10
 
-    vec_rows = vector_branch(search_text, k=knn_k)
-    fts_rows = text_branch(search_text, k=fts_k)
-    now_ms = time.time() * 1000
-    final_res = union_and_rank(vec_rows, fts_rows, search_text, now_ms, limit)
-    # print_with_separator('result', final_res)
-    print(json.dumps(final_res, indent=4))
+    skip_stats = False
+    iter = kwargs.get('iter')
+    if not iter:
+        iter = 1
+        skip_stats = True
+
+    times = []
+    for i in range(iter):
+        start_time = time.perf_counter()
+        vec_rows = vector_branch(search_text, k=knn_k)
+        fts_rows = text_branch(search_text, k=fts_k)
+        now_ms = time.time() * 1000
+        final_res = union_and_rank(vec_rows, fts_rows, search_text, now_ms, limit)
+        end_time = time.perf_counter()
+        times.append((end_time - start_time) * 1000)
+
+    if not skip_stats:
+        times = np.array(times)
+        p90 = np.percentile(times, 90)
+        print_with_separator('p90', p90)
+
+    if skip_stats:
+        print(json.dumps(final_res, indent=4))
 
 
 def get_base_filter():
